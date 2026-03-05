@@ -1,3 +1,20 @@
+
+# Next Auth Google Example
+This is a simple demo project to familiarize myself with authentication flows in Next.js applications.
+It implements simple registration, login, and social authentication (Google) using NextAuth.js.
+
+### Technologies Used
+- **Next.js** provides a flexible, production-ready environment for building full-stack React apps.
+- **NextAuth.js** simplifies authentication, supporting both credentials and OAuth providers with minimal setup.
+- **TypeScript** helps catch errors early and improves code quality.
+- **Tailwind CSS** enables fast, responsive UI development.
+- **bcryptjs** is a widely used library for securely hashing passwords.
+
+## Next Steps
+Going forward, I would like to integrate MongoDB or PostgreSQL for persistent database storage of user and product data. This will allow for proper implementation of registration and login flows. I also plan to add unit and integration testing. The design and styling could also be improved.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
