@@ -25,6 +25,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+before starting; Google sign-in also requires `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET`.
+
 First, run the development server:
 
 ```bash
@@ -40,6 +43,12 @@ bun dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 Run the API handler and routing tests with `npm test`.
+
+Dependency checks: run `npm audit`, `npm run lint`, `npx tsc --noEmit`, and
+`npm run build` after upgrades. NextAuth remains on its v5 beta API.
+The scoped minimatch override patches the lint parser's dependency while
+its upstream release still requires the affected 10.x series; remove it
+when the parser adopts a patched compatible release.
 
 You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
 

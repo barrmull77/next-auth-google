@@ -14,13 +14,12 @@ vi.mock("next-auth", () => ({
 vi.mock("next-auth/providers/google", () => ({ default: vi.fn() }));
 vi.mock("next-auth/providers/credentials", () => ({ default: vi.fn() }));
 
-import "@/auth";
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 it("does not refresh access tokens for credential sessions", async () => {
+  await import("@/auth");
   const config: NextAuthConfig = captureConfig.mock.calls[0][0];
   const jwt = config.callbacks?.jwt;
   expect(jwt).toBeDefined();
