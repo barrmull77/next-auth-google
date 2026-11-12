@@ -3,6 +3,12 @@
 This is a simple demo project to familiarize myself with authentication flows in Next.js applications.
 It implements simple registration, login, and social authentication (Google) using NextAuth.js.
 
+The authentication demo lives under `src/app`. Its `/api/me` returns only the
+authenticated demo user's name and email; `/api/users` is disabled until an
+admin authorization policy is implemented. Demo users use hardcoded passwords
+and registration is not persistent. Run locally only; do not deploy this demo
+or use it for real accounts.
+
 ### Technologies Used
 - **Next.js** provides a flexible, production-ready environment for building full-stack React apps.
 - **NextAuth.js** simplifies authentication, supporting both credentials and OAuth providers with minimal setup.
@@ -33,9 +39,11 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run the API handler and routing tests with `npm test`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to load the Inter font.
 
 ## Learn More
 

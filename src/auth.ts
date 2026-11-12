@@ -109,8 +109,12 @@ export const {
         
         return {
           ...token,
+          authProvider: "credentials",
           user,
         };
+      }
+      if (token.authProvider === "credentials") {
+        return token;
       }
       // Handle OAuth users (Google)
       if (token.accessToken) {
@@ -126,7 +130,10 @@ export const {
           user,
         };
       }
-      if (token.accessTokenExpires && Date.now() < token.accessTokenExpires) {
+      if (
+        typeof token.accessTokenExpires === "number" &&
+        Date.now() < token.accessTokenExpires
+      ) {
         return token;
       }
       return refreshAccessToken(token as Token);
