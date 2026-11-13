@@ -10,7 +10,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:setup-local": "node --experimental-strip-types --env-file=.env.local scripts/setup-local-db.mts",
+    "db:apply-schema": "node --experimental-strip-types --env-file=.env.local scripts/apply-schema.mts",
+    "db:check": "node --experimental-strip-types --env-file=.env.local scripts/check-db.mts",
+    "test:db": "node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/db.integration.test.ts"
   },
   "dependencies": {
     "@types/jwt-decode": "^2.2.1",
@@ -19,8 +23,10 @@
     "lucide-react": "^0.564.0",
     "next": "16.4.6",
     "next-auth": "5.0.0-beta.32",
+    "pg": "^8.23.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "server-only": "0.0.1"
   },
   "overrides": {
     "@typescript-eslint/typescript-estree": {
@@ -30,6 +36,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

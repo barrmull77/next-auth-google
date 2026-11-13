@@ -17,7 +17,65 @@ or use it for real accounts.
 - **bcryptjs** is a widely used library for securely hashing passwords.
 
 ## Next Steps
-Going forward, I would like to integrate MongoDB or PostgreSQL for persistent database storage of user and product data. This will allow for proper implementation of registration and login flows. I also plan to add unit and integration testing. The design and styling could also be improved.
+The PostgreSQL foundation is implemented below. Registration and login still use
+separate in-memory stores; persistent users, password verification, and Google
+account linking remain subsequent increments.
+
+## Local PostgreSQL foundation
+
+Use the repository's `compose.yaml` with an ignored `.env.local` containing
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The initialization user
+is the local database owner, not the application's runtime login.
+
+```bash
+docker compose --env-file .env.local -p next-auth-google up -d --wait
+npm run db:setup-local
+npm run db:apply-schema
+npm run db:check
+```
+
+`db:setup-local` targets only `127.0.0.1:5435`. It creates a separate
+`next_auth_runtime` login and saves `DATABASE_URL` (runtime) and
+`OWNER_DATABASE_URL` (owner) in `.env.local`, preserving other settings.
+Rerunning rotates the runtime password; restart the app afterward. Never use
+this local setup command against shared or production databases.
+
+`db:apply-schema` runs `db/schema.sql` in one transaction, without migration
+history or checksums. It creates the `app` schema and `app.users` table; it is
+safe to rerun and does not seed accounts. A SQL failure rolls back that invocation.
+
+`app.users` has a generated UUID ID, required nonblank name, email and password
+hash, and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
+insertion time. Email uniqueness ignores case; surrounding spaces are rejected.
+Future update queries must set `updated_at` explicitly. The table currently
+supports password accounts only; Google account linking remains separate.
+The runtime login has schema access but no table read/write privileges yet.
+
+Edit this single setup file during local development. Future table definitions
+must grant only required table privileges to the runtime login. Editing a
+`CREATE TABLE IF NOT EXISTS` statement will not alter an existing table:
+existing databases need explicit SQL changes, or an intentional rebuild if all
+their data is disposable. Use versioned migrations when preserving data across
+environments becomes necessary.
+
+`src/lib/db.ts` provides a lazy, server-only connection pool using `DATABASE_URL`.
+Auth handlers are not connected to it yet. The runtime cannot create tables;
+the owner connection is used only by setup tooling, never request handlers.
+These commands do not reset the database or delete the Compose volume. If you
+ran the earlier migration runner, its unused `public.schema_migrations` table
+can remain; this setup neither reads nor updates it.
+
+Run `npm run test:db` explicitly to exercise schema setup, user constraints,
+reruns, rollback, and the server pool against a temporary database on the
+local PostgreSQL instance. It creates and drops only its own uniquely named
+test database using the local owner connection. Ordinary `npm test` skips this
+test unless `OWNER_DATABASE_URL` is explicitly supplied.
+
+The database commands run TypeScript `.mts` scripts using Node's type stripping
+(`--experimental-strip-types`), with no separate script runner. The flag supports
+the project's Node 22.12 minimum; older Node releases may show an experimental
+warning. Run `npx tsc --noEmit` to type-check them; Node strips types but does
+not check them at runtime.
 
 ---
 
@@ -25,7 +83,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-before starting; Google sign-in also requires `GOOGLE_CLIENT_ID` and
+Use Node.js 24 LTS inside WSL and install dependencies with `npm ci`.
+Configure `AUTH_SECRET` before starting; Google sign-in also requires `GOOGLE_CLIENT_ID` and
 `GOOGLE_CLIENT_SECRET`.
 
 First, run the development server:
