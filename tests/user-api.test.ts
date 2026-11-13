@@ -70,7 +70,9 @@ describe("GET /api/me", () => {
     try {
       const response = await getMe();
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: "Unable to retrieve user" });
+      expect(await response.json()).toEqual({
+        error: "Unable to retrieve user",
+      });
       expect(log).toHaveBeenCalledWith("Failed to retrieve current user");
     } finally {
       log.mockRestore();
@@ -84,7 +86,9 @@ describe("GET /api/me", () => {
     try {
       const response = await getMe();
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: "Unable to retrieve user" });
+      expect(await response.json()).toEqual({
+        error: "Unable to retrieve user",
+      });
       expect(getUserByEmail).not.toHaveBeenCalled();
       expect(log).toHaveBeenCalledWith("Failed to retrieve current user");
     } finally {
@@ -98,7 +102,9 @@ describe("GET /api/users", () => {
     const response = await getUsers();
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "User listing is unavailable" });
+    expect(await response.json()).toEqual({
+      error: "User listing is unavailable",
+    });
     expect(auth).not.toHaveBeenCalled();
     expect(getUserByEmail).not.toHaveBeenCalled();
   });

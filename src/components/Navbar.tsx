@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth } from "@/auth";
 import Logout from "./Logout";
-import { CircleUserRound } from 'lucide-react';
+import { CircleUserRound } from "lucide-react";
 
 const Navbar = async (): Promise<JSX.Element> => {
   const session = await auth();
@@ -23,7 +23,7 @@ const Navbar = async (): Promise<JSX.Element> => {
                 {session?.user?.image ? (
                   <Image
                     src={session?.user?.image}
-                    alt={session?.user?.name ?? 'user-image'}
+                    alt={session?.user?.name ?? "user-image"}
                     width={25}
                     height={25}
                     className="rounded-full"

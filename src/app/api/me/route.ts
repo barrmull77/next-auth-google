@@ -25,6 +25,9 @@ export const GET = async () => {
     );
   } catch {
     console.error("Failed to retrieve current user");
-    return NextResponse.json({ error: "Unable to retrieve user" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Unable to retrieve user" },
+      { status: 500 },
+    );
   }
 };

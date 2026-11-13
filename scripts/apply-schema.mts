@@ -7,10 +7,18 @@ export async function applySchema(
   connectionString: string | undefined,
   file: URL = new URL("../db/schema.sql", import.meta.url),
 ): Promise<void> {
-  if (!connectionString) throw new Error("OWNER_DATABASE_URL must be configured");
+
+  if (!connectionString)
+    throw new Error("OWNER_DATABASE_URL must be configured");
+  
   const sql = await readFile(file, "utf8");
-  const client = new pg.Client({ connectionString, connectionTimeoutMillis: 5000 });
+  const client = new pg.Client({
+    connectionString,
+    connectionTimeoutMillis: 5000,
+  });
+
   await client.connect();
+  
   try {
     await client.query("BEGIN");
     await client.query(sql);
@@ -23,11 +31,16 @@ export async function applySchema(
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   applySchema(process.env.OWNER_DATABASE_URL).then(
     () => console.log("Database schema applied."),
     () => {
-      console.error("Schema setup failed. Check OWNER_DATABASE_URL and db/schema.sql. Secrets are not printed.");
+      console.error(
+        "Schema setup failed. Check OWNER_DATABASE_URL and db/schema.sql. Secrets are not printed.",
+      );
       process.exitCode = 1;
     },
   );

@@ -1,15 +1,17 @@
-
 # Next Auth Google Example
+
 This is a simple demo project to familiarize myself with authentication flows in Next.js applications.
 It implements simple registration, login, and social authentication (Google) using NextAuth.js.
 
 The authentication demo lives under `src/app`. Its `/api/me` returns only the
 authenticated demo user's name and email; `/api/users` is disabled until an
 admin authorization policy is implemented. Demo users use hardcoded passwords
-and registration is not persistent. Run locally only; do not deploy this demo
-or use it for real accounts.
+and database-backed login is not implemented. Registration is stored in
+PostgreSQL, but registered users cannot log in yet. Run locally only; do not
+deploy this demo or use it for real accounts.
 
 ### Technologies Used
+
 - **Next.js** provides a flexible, production-ready environment for building full-stack React apps.
 - **NextAuth.js** simplifies authentication, supporting both credentials and OAuth providers with minimal setup.
 - **TypeScript** helps catch errors early and improves code quality.
@@ -17,9 +19,9 @@ or use it for real accounts.
 - **bcryptjs** is a widely used library for securely hashing passwords.
 
 ## Next Steps
-The PostgreSQL foundation is implemented below. Registration and login still use
-separate in-memory stores; persistent users, password verification, and Google
-account linking remain subsequent increments.
+
+Registration writes users to PostgreSQL. Database-backed login, password
+verification, and Google account linking remain subsequent increments.
 
 ## Local PostgreSQL foundation
 
@@ -49,7 +51,14 @@ hash, and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
 insertion time. Email uniqueness ignores case; surrounding spaces are rejected.
 Future update queries must set `updated_at` explicitly. The table currently
 supports password accounts only; Google account linking remains separate.
-The runtime login has schema access but no table read/write privileges yet.
+The runtime login may insert only the name, email and password hash columns.
+It cannot read, update or delete users.
+
+Registration trims names, trims and lowercases email, rejects duplicates
+case-insensitively, and stores bcrypt hashes with cost 12. Passwords must have
+at least eight characters and at most 72 UTF-8 bytes. The local demo returns
+409 for duplicate emails, which reveals whether an email is registered; it
+must not be deployed for real accounts.
 
 Edit this single setup file during local development. Future table definitions
 must grant only required table privileges to the runtime login. Editing a
@@ -59,7 +68,7 @@ their data is disposable. Use versioned migrations when preserving data across
 environments becomes necessary.
 
 `src/lib/db.ts` provides a lazy, server-only connection pool using `DATABASE_URL`.
-Auth handlers are not connected to it yet. The runtime cannot create tables;
+Registration uses this pool; credential login does not. The runtime cannot create tables;
 the owner connection is used only by setup tooling, never request handlers.
 These commands do not reset the database or delete the Compose volume. If you
 ran the earlier migration runner, its unused `public.schema_migrations` table
@@ -102,6 +111,20 @@ bun dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 Run the API handler and routing tests with `npm test`.
+
+### Formatting
+
+Prettier uses its default formatting rules. Format or check a specific file:
+
+```bash
+npm run format -- src/app/api/register/route.ts
+npm run format:check -- src/app/api/register/route.ts
+```
+
+Replace the file path with `.` to format or check the whole project. Existing
+files have not been reformatted, so a project-wide check may report differences.
+`npm run lint` remains a separate ESLint check. In VS Code, install the Prettier
+extension and select it as the formatter to use Format Document or format on save.
 
 Dependency checks: run `npm audit`, `npm run lint`, `npx tsc --noEmit`, and
 `npm run build` after upgrades. NextAuth remains on its v5 beta API.

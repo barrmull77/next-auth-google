@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const { Pool } = vi.hoisted(() => ({
-  Pool: vi.fn(class {
-    on = vi.fn();
-  }),
+  Pool: vi.fn(
+    class {
+      on = vi.fn();
+    },
+  ),
 }));
 vi.mock("pg", () => ({ Pool }));
 vi.mock("server-only", () => ({}));

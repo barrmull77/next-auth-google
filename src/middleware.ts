@@ -11,7 +11,6 @@ export async function middleware(request: NextRequest) {
   const { nextUrl } = request;
   const session = await auth();
   const isAuthenticated = !!session?.user;
-  
 
   if (!isAuthenticated && !isPublicRoute(nextUrl.pathname))
     return NextResponse.redirect(new URL(LOGIN, nextUrl));
@@ -19,7 +18,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Strictly exclude NextAuth.js API routes, _next, and static files
-  matcher: [
-    '/((?!api/auth|_next|.*\\..*).*)'
-  ]
+  matcher: ["/((?!api/auth|_next|.*\\..*).*)"],
 };

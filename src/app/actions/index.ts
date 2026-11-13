@@ -4,14 +4,13 @@ import { signIn, signOut } from "@/auth";
 import { revalidatePath } from "next/cache";
 
 export async function doSocialLogin(formData: FormData): Promise<void> {
-    const action = formData.get('action') as string;
-    await signIn(action, { redirectTo: "/" });
+  const action = formData.get("action") as string;
+  await signIn(action, { redirectTo: "/" });
 }
 
 export async function doLogout(): Promise<void> {
   await signOut({ redirectTo: "/" });
 }
-
 
 export interface CredentialLoginResponse {
   error?: { message: string };
@@ -20,8 +19,9 @@ export interface CredentialLoginResponse {
   [key: string]: unknown;
 }
 
-export async function doCredentialLogin(formData: FormData): Promise<CredentialLoginResponse | undefined> {
-  
+export async function doCredentialLogin(
+  formData: FormData,
+): Promise<CredentialLoginResponse | undefined> {
   try {
     const response = await signIn("credentials", {
       email: formData.get("email") as string,

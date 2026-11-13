@@ -9,7 +9,9 @@ const ProductList = (): JSX.Element => {
       {products.map((product) => (
         <Link href={`/products/${product.id}`} key={product.id}>
           <div className="text-2xl">
-            <p>{product.image} - {product.name}</p>
+            <p>
+              {product.image} - {product.name}
+            </p>
           </div>
         </Link>
       ))}

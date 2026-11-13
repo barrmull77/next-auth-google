@@ -1,10 +1,8 @@
-
-
 import type { Provider } from "next-auth/providers/index";
 
 export interface AuthConfig {
   session: {
-    strategy: 'jwt' | 'database';
+    strategy: "jwt" | "database";
     maxAge: number;
   };
   providers: Provider[];
@@ -12,7 +10,7 @@ export interface AuthConfig {
 
 export const authConfig: AuthConfig = {
   session: {
-    strategy: 'jwt',
+    strategy: "jwt",
     maxAge: 24 * 60 * 60, // 1 Day
   },
   providers: [],
