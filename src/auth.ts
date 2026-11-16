@@ -6,6 +6,7 @@ import type { JWT } from "@auth/core/jwt";
 import type { AdapterUser } from "@auth/core/adapters";
 import type { Account, User, Session } from "next-auth";
 import { authConfig } from "./auth.config";
+import { authenticateCredentials } from "@/lib/credentials";
 
 // Extend NextAuth Session type to include accessToken
 declare module "next-auth" {
@@ -65,26 +66,7 @@ export const {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials: Record<string, unknown> | null) {
-        if (!credentials) return null;
-        const { getUserByEmail } = await import("@/data/users");
-        const email = credentials.email as string;
-        const password = credentials.password as string;
-
-        const user = await getUserByEmail(email);
-        if (!user) return null;
-
-        const { users } = await import("./data/users");
-
-        const originalUser = users.find((u) => u.email === email);
-        if (!originalUser || originalUser.password !== password) return null;
-
-        return {
-          id: email,
-          email: user.email,
-          name: user.name,
-        };
-      },
+      authorize: authenticateCredentials,
     }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -108,7 +90,7 @@ export const {
       user?: User | AdapterUser;
       account?: Account | null;
     }) => {
-      // Handle dummy users (no accessToken/refreshToken)
+      // Credential users do not have OAuth access or refresh tokens.
       if (user && account?.provider === "credentials") {
         return {
           ...token,
@@ -161,7 +143,7 @@ export const {
       newSession?: unknown;
       trigger?: "update";
     }) => {
-      // Always populate session.user for credentials/dummy users
+      // Include the authenticated user in the session.
       if (token && token.user) {
         session.user = token.user;
       }

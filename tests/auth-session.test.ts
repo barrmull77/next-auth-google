@@ -13,6 +13,7 @@ vi.mock("next-auth", () => ({
 }));
 vi.mock("next-auth/providers/google", () => ({ default: vi.fn() }));
 vi.mock("next-auth/providers/credentials", () => ({ default: vi.fn() }));
+vi.mock("@/lib/credentials", () => ({ authenticateCredentials: vi.fn() }));
 
 afterEach(() => {
   vi.restoreAllMocks();

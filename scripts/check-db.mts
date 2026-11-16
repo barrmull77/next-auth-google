@@ -8,11 +8,11 @@ interface RuntimePermissions {
   public_create: boolean;
   no_memberships: boolean;
   insert_columns: boolean;
+  select_columns: boolean;
   forbidden_access: boolean;
 }
 
 async function check(): Promise<void> {
-
   if (!process.env.DATABASE_URL)
     throw new Error("DATABASE_URL must be configured");
 
@@ -32,7 +32,12 @@ async function check(): Promise<void> {
         has_column_privilege(current_user, 'app.users', 'name', 'INSERT')
           AND has_column_privilege(current_user, 'app.users', 'email', 'INSERT')
           AND has_column_privilege(current_user, 'app.users', 'password_hash', 'INSERT') AS insert_columns,
-        has_any_column_privilege(current_user, 'app.users', 'SELECT')
+        has_column_privilege(current_user, 'app.users', 'id', 'SELECT')
+          AND has_column_privilege(current_user, 'app.users', 'name', 'SELECT')
+          AND has_column_privilege(current_user, 'app.users', 'email', 'SELECT')
+          AND has_column_privilege(current_user, 'app.users', 'password_hash', 'SELECT') AS select_columns,
+        has_column_privilege(current_user, 'app.users', 'created_at', 'SELECT')
+          OR has_column_privilege(current_user, 'app.users', 'updated_at', 'SELECT')
           OR has_any_column_privilege(current_user, 'app.users', 'UPDATE')
           OR has_table_privilege(current_user, 'app.users', 'DELETE')
           OR has_column_privilege(current_user, 'app.users', 'id', 'INSERT')
@@ -51,6 +56,7 @@ async function check(): Promise<void> {
       row.app_create ||
       row.public_create ||
       !row.insert_columns ||
+      !row.select_columns ||
       row.forbidden_access
     ) {
       throw new Error(
@@ -59,9 +65,8 @@ async function check(): Promise<void> {
     }
 
     console.log(
-      "PostgreSQL connection verified: runtime login can insert registration fields but cannot read or modify users.",
+      "PostgreSQL connection verified: runtime login can register users and read authentication fields, but cannot update or delete users.",
     );
-    
   } finally {
     await pool.end();
   }

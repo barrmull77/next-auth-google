@@ -27,9 +27,7 @@ const RegistrationForm = (): JSX.Element => {
 
       if (response.status === 201) {
         form.reset();
-        setMessage(
-          "Account saved. Database-backed login is not available yet.",
-        );
+        setMessage("Account saved. You can now sign in.");
       } else {
         setMessage(await response.text());
       }

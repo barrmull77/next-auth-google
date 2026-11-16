@@ -4,11 +4,10 @@ This is a simple demo project to familiarize myself with authentication flows in
 It implements simple registration, login, and social authentication (Google) using NextAuth.js.
 
 The authentication demo lives under `src/app`. Its `/api/me` returns only the
-authenticated demo user's name and email; `/api/users` is disabled until an
-admin authorization policy is implemented. Demo users use hardcoded passwords
-and database-backed login is not implemented. Registration is stored in
-PostgreSQL, but registered users cannot log in yet. Run locally only; do not
-deploy this demo or use it for real accounts.
+authenticated session's name and email; `/api/users` is disabled until an
+admin authorization policy is implemented. Registration and credential login
+use PostgreSQL. Run locally only; do not deploy this demo or use it for real
+accounts.
 
 ### Technologies Used
 
@@ -20,8 +19,8 @@ deploy this demo or use it for real accounts.
 
 ## Next Steps
 
-Registration writes users to PostgreSQL. Database-backed login, password
-verification, and Google account linking remain subsequent increments.
+Registration and credential login use PostgreSQL. Google account linking remains
+a separate increment.
 
 ## Local PostgreSQL foundation
 
@@ -51,14 +50,21 @@ hash, and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
 insertion time. Email uniqueness ignores case; surrounding spaces are rejected.
 Future update queries must set `updated_at` explicitly. The table currently
 supports password accounts only; Google account linking remains separate.
-The runtime login may insert only the name, email and password hash columns.
-It cannot read, update or delete users.
+The runtime login may insert the name, email and password hash columns, and
+select the ID, name, email and password hash for authentication. It cannot
+read timestamps or update or delete users.
 
 Registration trims names, trims and lowercases email, rejects duplicates
 case-insensitively, and stores bcrypt hashes with cost 12. Passwords must have
 at least eight characters and at most 72 UTF-8 bytes. The local demo returns
 409 for duplicate emails, which reveals whether an email is registered; it
 must not be deployed for real accounts.
+Credential login normalizes email the same way, checks the bcrypt hash, and
+reports the same message for an unknown account or incorrect password.
+There is no login rate limiting, and Google sign-in is not linked to these
+password accounts. Existing JWT sessions remain valid until logout or expiry
+(up to 24 hours); `/api/me` reports the identity stored in that session rather
+than reloading the account.
 
 Edit this single setup file during local development. Future table definitions
 must grant only required table privileges to the runtime login. Editing a
@@ -68,7 +74,7 @@ their data is disposable. Use versioned migrations when preserving data across
 environments becomes necessary.
 
 `src/lib/db.ts` provides a lazy, server-only connection pool using `DATABASE_URL`.
-Registration uses this pool; credential login does not. The runtime cannot create tables;
+Registration and credential login use this pool. The runtime cannot create tables;
 the owner connection is used only by setup tooling, never request handlers.
 These commands do not reset the database or delete the Compose volume. If you
 ran the earlier migration runner, its unused `public.schema_migrations` table

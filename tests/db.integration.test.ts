@@ -11,6 +11,7 @@ import { applySchema } from "../scripts/apply-schema.mts";
 vi.mock("server-only", () => ({}));
 import { getDatabasePool } from "@/lib/db";
 import { POST as register } from "@/app/api/register/route";
+import { authenticateCredentials } from "@/lib/credentials";
 
 it.skipIf(!process.env.OWNER_DATABASE_URL)(
   "applies the schema safely on rerun and connects through a restricted runtime pool",
@@ -106,7 +107,7 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
         pool.query("CREATE TABLE app.forbidden (id integer)"),
       ).rejects.toMatchObject({ code: "42501" });
       await expect(
-        pool.query("SELECT id FROM app.users"),
+        pool.query("SELECT created_at FROM app.users"),
       ).rejects.toMatchObject({ code: "42501" });
       const request = (email: string) =>
         new Request("http://localhost/api/register", {
@@ -139,6 +140,27 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
         ),
       ).toBe(true);
       expect(bcrypt.getRounds(persisted.rows[0].password_hash)).toBe(12);
+      const authenticated = await authenticateCredentials({
+        email: "  NEW@EXAMPLE.INVALID ",
+        password: "example-password",
+      });
+      expect(authenticated).toEqual({
+        id: expect.any(String),
+        name: "Registered User",
+        email: "new@example.invalid",
+      });
+      expect(
+        await authenticateCredentials({
+          email: "new@example.invalid",
+          password: "wrong-password",
+        }),
+      ).toBeNull();
+      expect(
+        await authenticateCredentials({
+          email: "unknown@example.invalid",
+          password: "example-password",
+        }),
+      ).toBeNull();
       const concurrent = await Promise.all([
         register(request("race@example.invalid")),
         register(request("RACE@example.invalid")),

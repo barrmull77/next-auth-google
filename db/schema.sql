@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS app.users (
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON app.users (lower(email));
 
 GRANT INSERT (name, email, password_hash) ON app.users TO next_auth_runtime;
+GRANT SELECT (id, name, email, password_hash) ON app.users TO next_auth_runtime;

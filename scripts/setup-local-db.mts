@@ -96,7 +96,6 @@ async function setup(): Promise<void> {
     console.log(
       "Local runtime login configured; connection URLs saved in .env.local.",
     );
-    
   } catch (error) {
     await client.query("ROLLBACK");
     await writeFile(envFile, previous, { mode: 0o600 });

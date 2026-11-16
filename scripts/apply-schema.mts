@@ -7,10 +7,9 @@ export async function applySchema(
   connectionString: string | undefined,
   file: URL = new URL("../db/schema.sql", import.meta.url),
 ): Promise<void> {
-
   if (!connectionString)
     throw new Error("OWNER_DATABASE_URL must be configured");
-  
+
   const sql = await readFile(file, "utf8");
   const client = new pg.Client({
     connectionString,
@@ -18,7 +17,7 @@ export async function applySchema(
   });
 
   await client.connect();
-  
+
   try {
     await client.query("BEGIN");
     await client.query(sql);

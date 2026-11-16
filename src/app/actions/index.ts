@@ -1,6 +1,7 @@
 "use server";
 
 import { signIn, signOut } from "@/auth";
+import { AuthError } from "next-auth";
 import { revalidatePath } from "next/cache";
 
 export async function doSocialLogin(formData: FormData): Promise<void> {
@@ -13,24 +14,26 @@ export async function doLogout(): Promise<void> {
 }
 
 export interface CredentialLoginResponse {
-  error?: { message: string };
-  ok?: true;
-  url?: string;
-  [key: string]: unknown;
+  error?: string;
 }
 
 export async function doCredentialLogin(
   formData: FormData,
-): Promise<CredentialLoginResponse | undefined> {
+): Promise<CredentialLoginResponse> {
   try {
-    const response = await signIn("credentials", {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
+    await signIn("credentials", {
+      email: formData.get("email"),
+      password: formData.get("password"),
       redirect: false,
+      redirectTo: "/products",
     });
     revalidatePath("/");
-    return response as CredentialLoginResponse | undefined;
+    return {};
   } catch (err) {
-    throw err;
+    if (err instanceof AuthError && err.type === "CredentialsSignin") {
+      return { error: "Invalid email or password." };
+    }
+    console.error("Credential sign-in failed");
+    return { error: "Unable to sign in. Please try again." };
   }
 }
