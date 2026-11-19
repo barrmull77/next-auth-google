@@ -74,6 +74,36 @@ describe("authenticateCredentials", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it("rejects Google-only accounts even if the dummy hash comparison matches", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          id: "google-user",
+          name: "Google User",
+          email: "google@example.test",
+          password_hash: null,
+        },
+      ],
+    });
+    const compare = vi
+      .spyOn(bcrypt, "compare")
+      .mockImplementation(async () => true);
+    try {
+      expect(
+        await authenticateCredentials({
+          email: "google@example.test",
+          password: "example-password",
+        }),
+      ).toBeNull();
+      expect(compare).toHaveBeenCalledWith(
+        "example-password",
+        expect.any(String),
+      );
+    } finally {
+      compare.mockRestore();
+    }
+  });
+
   it("surfaces a sanitized database failure", async () => {
     query.mockRejectedValue(new Error("sensitive database error"));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});

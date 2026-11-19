@@ -21,5 +21,6 @@
 
   Run `npm run test:db` for database-related changes, only against its
   explicitly disposable local test database.
+
 - Review the final diff for unrelated changes and report checks that could not
   be run or passed.

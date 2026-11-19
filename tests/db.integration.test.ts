@@ -42,12 +42,11 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
       created = true;
       ownerUrl.pathname = `/${databaseName}`;
       await applySchema(ownerUrl.toString());
-      await applySchema(ownerUrl.toString());
 
       schemaClient = new pg.Client({ connectionString: ownerUrl.toString() });
       await schemaClient.connect();
       const passwordHash = await bcrypt.hash("synthetic-test-password", 5);
-      const inserted = await schemaClient.query(
+      const inserted = await schemaClient.query<{ id: string }>(
         "INSERT INTO app.users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, password_hash, created_at, updated_at",
         ["Test User", "test@example.invalid", passwordHash],
       );
@@ -63,6 +62,19 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
           updated_at: expect.any(Date),
         },
       ]);
+      // Recreate the old schema contract to verify a data-preserving upgrade.
+      await schemaClient.query(
+        "DROP TABLE app.accounts; ALTER TABLE app.users ALTER COLUMN password_hash SET NOT NULL",
+      );
+      await applySchema(ownerUrl.toString());
+      await applySchema(ownerUrl.toString());
+      expect(
+        (
+          await schemaClient.query(
+            "SELECT id, name, email, password_hash, created_at, updated_at FROM app.users",
+          )
+        ).rows,
+      ).toEqual(inserted.rows);
       await expect(
         schemaClient.query(
           "INSERT INTO app.users (name, email, password_hash) VALUES ($1, $2, $3)",
@@ -74,7 +86,6 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
         ["Test", "", passwordHash, "23514"],
         ["Test", " spaced@example.invalid ", passwordHash, "23514"],
         ["Test", "other@example.invalid", "", "23514"],
-        ["Test", "other@example.invalid", null, "23502"],
       ]) {
         await expect(
           schemaClient.query(
@@ -83,12 +94,18 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
           ),
         ).rejects.toMatchObject({ code });
       }
-      await expect(
-        schemaClient.query(
-          "INSERT INTO app.users (name, email) VALUES ($1, $2)",
-          ["Test", "missing@example.invalid"],
-        ),
-      ).rejects.toMatchObject({ code: "23502" });
+      const googleUser = await schemaClient.query<{
+        id: string;
+        password_hash: string | null;
+      }>(
+        "INSERT INTO app.users (name, email) VALUES ($1, $2) RETURNING id, password_hash",
+        ["Google User", "google@example.invalid"],
+      );
+      expect(googleUser.rows[0].password_hash).toBeNull();
+      await schemaClient.query(
+        "INSERT INTO app.users (name, email, password_hash) VALUES ($1, $2, $3)",
+        ["No Password", "null-password@example.invalid", null],
+      );
       await applySchema(ownerUrl.toString());
       expect(
         (
@@ -96,7 +113,7 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
             "SELECT count(*)::integer AS count FROM app.users",
           )
         ).rows,
-      ).toEqual([{ count: 1 }]);
+      ).toEqual([{ count: 3 }]);
 
       vi.stubEnv("DATABASE_URL", runtimeUrl.toString());
       pool = getDatabasePool();
@@ -109,6 +126,70 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
       await expect(
         pool.query("SELECT created_at FROM app.users"),
       ).rejects.toMatchObject({ code: "42501" });
+      const googleUserId = googleUser.rows[0].id;
+      await pool.query(
+        "INSERT INTO app.accounts (user_id, provider, provider_account_id) VALUES ($1, $2, $3)",
+        [googleUserId, "google", "synthetic-google-id"],
+      );
+      expect(
+        (
+          await pool.query(
+            "SELECT user_id, provider, provider_account_id FROM app.accounts",
+          )
+        ).rows,
+      ).toEqual([
+        {
+          user_id: googleUserId,
+          provider: "google",
+          provider_account_id: "synthetic-google-id",
+        },
+      ]);
+      for (const userId of [googleUserId, inserted.rows[0].id]) {
+        await expect(
+          pool.query(
+            "INSERT INTO app.accounts (user_id, provider, provider_account_id) VALUES ($1, $2, $3)",
+            [userId, "google", "synthetic-google-id"],
+          ),
+        ).rejects.toMatchObject({ code: "23505" });
+      }
+      for (const [userId, provider, accountId, code] of [
+        [randomUUID(), "google", "missing-user", "23503"],
+        [null, "google", "null-user", "23502"],
+        [googleUserId, null, "null-provider", "23502"],
+        [googleUserId, "unsupported", "other-provider", "23514"],
+        [googleUserId, "google", null, "23502"],
+        [googleUserId, "google", "", "23514"],
+        [googleUserId, "google", " spaced ", "23514"],
+      ]) {
+        await expect(
+          pool.query(
+            "INSERT INTO app.accounts (user_id, provider, provider_account_id) VALUES ($1, $2, $3)",
+            [userId, provider, accountId],
+          ),
+        ).rejects.toMatchObject({ code });
+      }
+      await expect(
+        pool.query("UPDATE app.accounts SET user_id = $1", [
+          inserted.rows[0].id,
+        ]),
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        pool.query("DELETE FROM app.accounts"),
+      ).rejects.toMatchObject({
+        code: "42501",
+      });
+      await expect(pool.query("TRUNCATE app.accounts")).rejects.toMatchObject({
+        code: "42501",
+      });
+      await applySchema(ownerUrl.toString());
+      expect(
+        (
+          await pool.query(
+            "SELECT user_id FROM app.accounts WHERE provider = $1 AND provider_account_id = $2",
+            ["google", "synthetic-google-id"],
+          )
+        ).rows,
+      ).toEqual([{ user_id: googleUserId }]);
       const request = (email: string) =>
         new Request("http://localhost/api/register", {
           method: "POST",
@@ -158,6 +239,12 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
       expect(
         await authenticateCredentials({
           email: "unknown@example.invalid",
+          password: "example-password",
+        }),
+      ).toBeNull();
+      expect(
+        await authenticateCredentials({
+          email: "google@example.invalid",
           password: "example-password",
         }),
       ).toBeNull();

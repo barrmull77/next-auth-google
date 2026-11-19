@@ -9,6 +9,8 @@ interface RuntimePermissions {
   no_memberships: boolean;
   insert_columns: boolean;
   select_columns: boolean;
+  account_insert_columns: boolean;
+  account_select_columns: boolean;
   forbidden_access: boolean;
 }
 
@@ -36,13 +38,22 @@ async function check(): Promise<void> {
           AND has_column_privilege(current_user, 'app.users', 'name', 'SELECT')
           AND has_column_privilege(current_user, 'app.users', 'email', 'SELECT')
           AND has_column_privilege(current_user, 'app.users', 'password_hash', 'SELECT') AS select_columns,
+        has_column_privilege(current_user, 'app.accounts', 'user_id', 'INSERT')
+          AND has_column_privilege(current_user, 'app.accounts', 'provider', 'INSERT')
+          AND has_column_privilege(current_user, 'app.accounts', 'provider_account_id', 'INSERT') AS account_insert_columns,
+        has_column_privilege(current_user, 'app.accounts', 'user_id', 'SELECT')
+          AND has_column_privilege(current_user, 'app.accounts', 'provider', 'SELECT')
+          AND has_column_privilege(current_user, 'app.accounts', 'provider_account_id', 'SELECT') AS account_select_columns,
         has_column_privilege(current_user, 'app.users', 'created_at', 'SELECT')
           OR has_column_privilege(current_user, 'app.users', 'updated_at', 'SELECT')
           OR has_any_column_privilege(current_user, 'app.users', 'UPDATE')
           OR has_table_privilege(current_user, 'app.users', 'DELETE')
           OR has_column_privilege(current_user, 'app.users', 'id', 'INSERT')
           OR has_column_privilege(current_user, 'app.users', 'created_at', 'INSERT')
-          OR has_column_privilege(current_user, 'app.users', 'updated_at', 'INSERT') AS forbidden_access
+          OR has_column_privilege(current_user, 'app.users', 'updated_at', 'INSERT')
+          OR has_any_column_privilege(current_user, 'app.accounts', 'UPDATE')
+          OR has_table_privilege(current_user, 'app.accounts', 'DELETE')
+          OR has_table_privilege(current_user, 'app.accounts', 'TRUNCATE') AS forbidden_access
       FROM pg_roles WHERE rolname = current_user
     `);
 
@@ -57,6 +68,8 @@ async function check(): Promise<void> {
       row.public_create ||
       !row.insert_columns ||
       !row.select_columns ||
+      !row.account_insert_columns ||
+      !row.account_select_columns ||
       row.forbidden_access
     ) {
       throw new Error(
@@ -65,7 +78,7 @@ async function check(): Promise<void> {
     }
 
     console.log(
-      "PostgreSQL connection verified: runtime login can register users and read authentication fields, but cannot update or delete users.",
+      "PostgreSQL connection verified: runtime login can insert and read authentication fields and Google account associations, but cannot update or delete them.",
     );
   } finally {
     await pool.end();

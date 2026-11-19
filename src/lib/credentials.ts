@@ -6,7 +6,7 @@ interface CredentialRow {
   id: string;
   name: string;
   email: string;
-  password_hash: string;
+  password_hash: string | null;
 }
 
 interface CredentialUser {
@@ -52,10 +52,10 @@ export async function authenticateCredentials(
     password,
     user?.password_hash ?? DUMMY_HASH,
   );
-  if (!user || !matches) return null;
-  return { 
-    id: user.id, 
-    name: user.name, 
-    email: user.email 
+  if (!user?.password_hash || !matches) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
   };
 }

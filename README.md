@@ -19,8 +19,9 @@ accounts.
 
 ## Next Steps
 
-Registration and credential login use PostgreSQL. Google account linking remains
-a separate increment.
+Registration and credential login use PostgreSQL. The database supports
+Google-only users and Google account associations; persisting Google sign-ins
+and explicit account linking remain separate increments.
 
 ## Local PostgreSQL foundation
 
@@ -42,17 +43,28 @@ Rerunning rotates the runtime password; restart the app afterward. Never use
 this local setup command against shared or production databases.
 
 `db:apply-schema` runs `db/schema.sql` in one transaction, without migration
-history or checksums. It creates the `app` schema and `app.users` table; it is
-safe to rerun and does not seed accounts. A SQL failure rolls back that invocation.
+history or checksums. It creates the `app` schema and its `users` and `accounts`
+tables; it is safe to rerun and does not seed accounts. A SQL failure rolls back
+that invocation. For an existing password-only database, run
+`npm run db:apply-schema` as the owner: the explicit `ALTER TABLE` makes password
+hashes nullable without changing existing users, hashes or IDs, and creates the
+account association table. Then run `npm run db:check`.
 
-`app.users` has a generated UUID ID, required nonblank name, email and password
-hash, and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
+`app.users` has a generated UUID ID, required nonblank name and email, an optional
+password hash (nonblank when present), and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
 insertion time. Email uniqueness ignores case; surrounding spaces are rejected.
-Future update queries must set `updated_at` explicitly. The table currently
-supports password accounts only; Google account linking remains separate.
+Future update queries must set `updated_at` explicitly.
 The runtime login may insert the name, email and password hash columns, and
 select the ID, name, email and password hash for authentication. It cannot
 read timestamps or update or delete users.
+
+`app.accounts` associates a user ID with a Google provider account ID. The
+`(provider, provider_account_id)` primary key prevents a Google identity from
+belonging to multiple users, and the foreign key requires an existing user.
+Only `google` is accepted; provider account IDs must be nonblank and have no
+surrounding spaces. The runtime may insert and read these three columns, but
+cannot update, delete or truncate account associations. No Google tokens are
+stored. This schema does not create or link accounts during Google sign-in yet.
 
 Registration trims names, trims and lowercases email, rejects duplicates
 case-insensitively, and stores bcrypt hashes with cost 12. Passwords must have
@@ -60,7 +72,8 @@ at least eight characters and at most 72 UTF-8 bytes. The local demo returns
 409 for duplicate emails, which reveals whether an email is registered; it
 must not be deployed for real accounts.
 Credential login normalizes email the same way, checks the bcrypt hash, and
-reports the same message for an unknown account or incorrect password.
+reports the same message for an unknown account, incorrect password or account
+without a password hash.
 There is no login rate limiting, and Google sign-in is not linked to these
 password accounts. Existing JWT sessions remain valid until logout or expiry
 (up to 24 hours); `/api/me` reports the identity stored in that session rather
@@ -80,8 +93,8 @@ These commands do not reset the database or delete the Compose volume. If you
 ran the earlier migration runner, its unused `public.schema_migrations` table
 can remain; this setup neither reads nor updates it.
 
-Run `npm run test:db` explicitly to exercise schema setup, user constraints,
-reruns, rollback, and the server pool against a temporary database on the
+Run `npm run test:db` explicitly to exercise schema setup, password-only
+upgrades, user/account constraints, runtime permissions, reruns, rollback, and the server pool against a temporary database on the
 local PostgreSQL instance. It creates and drops only its own uniquely named
 test database using the local owner connection. Ordinary `npm test` skips this
 test unless `OWNER_DATABASE_URL` is explicitly supplied.
