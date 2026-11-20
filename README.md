@@ -1,33 +1,24 @@
 # Next Auth Google Example
 
-This is a simple demo project to familiarize myself with authentication flows in Next.js applications.
-It implements simple registration, login, and social authentication (Google) using NextAuth.js.
+A local Next.js/NextAuth.js demo with PostgreSQL-backed registration, password
+login and Google sign-in. **Do not deploy it or use real accounts.**
 
-The authentication demo lives under `src/app`. Its `/api/me` returns only the
-authenticated session's name and email; `/api/users` is disabled until an
-admin authorization policy is implemented. Registration and credential login
-use PostgreSQL. Run locally only; do not deploy this demo or use it for real
-accounts.
+Code lives under `src/app`. `/api/me` returns the session's name and email;
+`/api/users` stays disabled until an admin authorization policy exists.
 
 ### Technologies Used
 
-- **Next.js** provides a flexible, production-ready environment for building full-stack React apps.
-- **NextAuth.js** simplifies authentication, supporting both credentials and OAuth providers with minimal setup.
-- **TypeScript** helps catch errors early and improves code quality.
-- **Tailwind CSS** enables fast, responsive UI development.
-- **bcryptjs** is a widely used library for securely hashing passwords.
+- **Next.js**: application framework.
+- **NextAuth.js**: password and Google authentication.
+- **TypeScript**: static type checking.
+- **Tailwind CSS**: styling.
+- **bcryptjs**: password hashing.
 
-## Next Steps
-
-Registration and credential login use PostgreSQL. The database supports
-Google-only users and Google account associations; persisting Google sign-ins
-and explicit account linking remain separate increments.
 
 ## Local PostgreSQL foundation
 
-Use the repository's `compose.yaml` with an ignored `.env.local` containing
-`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The initialization user
-is the local database owner, not the application's runtime login.
+Set `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` in an ignored
+`.env.local`. These initialize the local database owner, not the runtime login.
 
 ```bash
 docker compose --env-file .env.local -p next-auth-google up -d --wait
@@ -36,74 +27,82 @@ npm run db:apply-schema
 npm run db:check
 ```
 
-`db:setup-local` targets only `127.0.0.1:5435`. It creates a separate
-`next_auth_runtime` login and saves `DATABASE_URL` (runtime) and
-`OWNER_DATABASE_URL` (owner) in `.env.local`, preserving other settings.
-Rerunning rotates the runtime password; restart the app afterward. Never use
-this local setup command against shared or production databases.
+`db:setup-local` targets only `127.0.0.1:5435`. It creates `next_auth_runtime`
+and saves `DATABASE_URL` (runtime) and `OWNER_DATABASE_URL` (owner), preserving
+other settings. Rerunning rotates the runtime password; restart the app afterward.
+Never use this command against shared or production databases.
 
-`db:apply-schema` runs `db/schema.sql` in one transaction, without migration
-history or checksums. It creates the `app` schema and its `users` and `accounts`
-tables; it is safe to rerun and does not seed accounts. A SQL failure rolls back
-that invocation. For an existing password-only database, run
-`npm run db:apply-schema` as the owner: the explicit `ALTER TABLE` makes password
-hashes nullable without changing existing users, hashes or IDs, and creates the
-account association table. Then run `npm run db:check`.
+`db:apply-schema` applies `db/schema.sql` in one transaction; failures roll back.
+It is rerunnable, with no seeds, migration history or checksums. For older
+password-only databases, the same command makes hashes nullable and adds
+`app.accounts`, preserving users, hashes and IDs. Run `db:check` afterward.
 
-`app.users` has a generated UUID ID, required nonblank name and email, an optional
-password hash (nonblank when present), and timezone-aware `created_at`/`updated_at` timestamps defaulting to the
-insertion time. Email uniqueness ignores case; surrounding spaces are rejected.
-Future update queries must set `updated_at` explicitly.
-The runtime login may insert the name, email and password hash columns, and
-select the ID, name, email and password hash for authentication. It cannot
-read timestamps or update or delete users.
+### Tables and permissions
 
-`app.accounts` associates a user ID with a Google provider account ID. The
-`(provider, provider_account_id)` primary key prevents a Google identity from
-belonging to multiple users, and the foreign key requires an existing user.
-Only `google` is accepted; provider account IDs must be nonblank and have no
-surrounding spaces. The runtime may insert and read these three columns, but
-cannot update, delete or truncate account associations. No Google tokens are
-stored. This schema does not create or link accounts during Google sign-in yet.
+- **`app.users`**: generated UUID, nonblank name/email, optional nonblank password
+  hash, and timezone-aware timestamps set at insertion. Email uniqueness ignores
+  case; surrounding spaces are rejected. Updates must set `updated_at` explicitly.
+- **`app.accounts`**: user ID, `google` provider and a nonblank, unpadded provider
+  account ID. A foreign key requires an existing user; the composite primary key
+  prevents a Google identity belonging to multiple users.
+- **Runtime access**: insert name/email/hash and read ID/name/email/hash on users;
+  insert/read all account columns. No user timestamp reads, updates or deletes;
+  no account updates, deletes or truncation.
 
-Registration trims names, trims and lowercases email, rejects duplicates
-case-insensitively, and stores bcrypt hashes with cost 12. Passwords must have
-at least eight characters and at most 72 UTF-8 bytes. The local demo returns
-409 for duplicate emails, which reveals whether an email is registered; it
-must not be deployed for real accounts.
-Credential login normalizes email the same way, checks the bcrypt hash, and
-reports the same message for an unknown account, incorrect password or account
-without a password hash.
-There is no login rate limiting, and Google sign-in is not linked to these
-password accounts. Existing JWT sessions remain valid until logout or expiry
-(up to 24 hours); `/api/me` reports the identity stored in that session rather
-than reloading the account.
+`src/lib/db.ts` provides a lazy, server-only pool using `DATABASE_URL`.
+Only setup tooling uses the owner connection; request handlers cannot create tables.
 
-Edit this single setup file during local development. Future table definitions
-must grant only required table privileges to the runtime login. Editing a
-`CREATE TABLE IF NOT EXISTS` statement will not alter an existing table:
-existing databases need explicit SQL changes, or an intentional rebuild if all
-their data is disposable. Use versioned migrations when preserving data across
-environments becomes necessary.
+### Password login and sessions
 
-`src/lib/db.ts` provides a lazy, server-only connection pool using `DATABASE_URL`.
-Registration and credential login use this pool. The runtime cannot create tables;
-the owner connection is used only by setup tooling, never request handlers.
-These commands do not reset the database or delete the Compose volume. If you
-ran the earlier migration runner, its unused `public.schema_migrations` table
-can remain; this setup neither reads nor updates it.
+- Registration trims names, trims/lowercases emails and hashes passwords with
+  bcrypt cost 12. Passwords require at least eight characters and at most 72 UTF-8 bytes.
+- Duplicate emails return 409, revealing registration status. There is no login
+  rate limiting.
+- Login uses the same email normalization and one failure message for unknown
+  users, wrong passwords and passwordless accounts.
+- JWT sessions last up to 24 hours. `/api/me` reads the stored session identity,
+  not a fresh database record.
 
-Run `npm run test:db` explicitly to exercise schema setup, password-only
-upgrades, user/account constraints, runtime permissions, reruns, rollback, and the server pool against a temporary database on the
-local PostgreSQL instance. It creates and drops only its own uniquely named
-test database using the local owner connection. Ordinary `npm test` skips this
-test unless `OWNER_DATABASE_URL` is explicitly supplied.
+### Google sign-in
 
-The database commands run TypeScript `.mts` scripts using Node's type stripping
-(`--experimental-strip-types`), with no separate script runner. The flag supports
-the project's Node 22.12 minimum; older Node releases may show an experimental
-warning. Run `npx tsc --noEmit` to type-check them; Node strips types but does
-not check them at runtime.
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`. Authorize
+`http://localhost:3000/api/auth/callback/google` in the Google OAuth client and
+apply the database schema.
+
+- Requires a verified email and nonblank name of up to 100 characters.
+- Creates a passwordless user and association atomically; failures leave neither.
+  Concurrent callbacks and retries resolve to one user.
+- Returning users are identified by `(google, provider_account_id)`; stored names
+  and emails are not updated from Google.
+- Email collisions are rejected without linking or changing existing users.
+  The login page directs users to their existing sign-in method.
+- Both login methods use the application user ID. No Google access/refresh
+  tokens are stored, exposed or refreshed.
+- Older, unpersisted Google sessions require fresh sign-in; existing password
+  sessions remain valid.
+
+**Live verification required:** use an approved test Google account to check
+first sign-in, logout, returning sign-in with the same application user ID,
+and rejection when its email already belongs to a password account. Automated
+tests do not replace this OAuth round trip.
+
+### Schema maintenance and database tests
+
+Edit `db/schema.sql` for local setup, granting only required runtime permissions.
+`CREATE TABLE IF NOT EXISTS` does not upgrade existing tables: use explicit
+SQL or rebuild only disposable databases. Introduce versioned migrations when
+preserving data across environments becomes necessary.
+
+Setup commands never reset the database or delete the Compose volume. Any
+legacy `public.schema_migrations` table is unused and can remain.
+
+`npm run test:db` checks upgrades, constraints, permissions, Google collisions,
+concurrency, rollback and reruns. It creates and drops only a uniquely named
+test database using the local owner connection. Ordinary `npm test` skips it
+unless `OWNER_DATABASE_URL` is supplied.
+
+Database scripts use Node's `--experimental-strip-types` flag (Node 22.12+).
+It removes types without checking them; run `npx tsc --noEmit` for type-checking.
 
 ---
 
@@ -140,16 +139,13 @@ npm run format -- src/app/api/register/route.ts
 npm run format:check -- src/app/api/register/route.ts
 ```
 
-Replace the file path with `.` to format or check the whole project. Existing
-files have not been reformatted, so a project-wide check may report differences.
-`npm run lint` remains a separate ESLint check. In VS Code, install the Prettier
-extension and select it as the formatter to use Format Document or format on save.
+Use `.` instead of a file path for a project-wide check; some existing files
+are unformatted. ESLint runs separately with `npm run lint`. In VS Code, select
+the Prettier extension for Format Document or format on save.
 
-Dependency checks: run `npm audit`, `npm run lint`, `npx tsc --noEmit`, and
-`npm run build` after upgrades. NextAuth remains on its v5 beta API.
-The scoped minimatch override patches the lint parser's dependency while
-its upstream release still requires the affected 10.x series; remove it
-when the parser adopts a patched compatible release.
+After dependency upgrades, run `npm audit`, `npm run lint`, `npx tsc --noEmit`
+and `npm run build`. NextAuth uses its v5 beta API. Remove the scoped minimatch
+override when the lint parser adopts a patched compatible release.
 
 You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
 

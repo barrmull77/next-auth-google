@@ -12,6 +12,7 @@ vi.mock("server-only", () => ({}));
 import { getDatabasePool } from "@/lib/db";
 import { POST as register } from "@/app/api/register/route";
 import { authenticateCredentials } from "@/lib/credentials";
+import { resolveGoogleUser } from "@/lib/google";
 
 it.skipIf(!process.env.OWNER_DATABASE_URL)(
   "applies the schema safely on rerun and connects through a restricted runtime pool",
@@ -263,6 +264,116 @@ it.skipIf(!process.env.OWNER_DATABASE_URL)(
           )
         ).rows,
       ).toEqual([{ count: 1 }]);
+      const profile = {
+        sub: "persisted-google-id",
+        name: "  Persisted Google User  ",
+        email: "  PERSISTED@EXAMPLE.INVALID ",
+        email_verified: true,
+      };
+      const googleSignIn = await resolveGoogleUser(profile, profile.sub);
+      expect(googleSignIn).toEqual({
+        user: {
+          id: expect.any(String),
+          name: "Persisted Google User",
+          email: "persisted@example.invalid",
+        },
+      });
+      if (!("user" in googleSignIn)) throw new Error("Google sign-in failed");
+      expect(
+        (
+          await schemaClient.query(
+            "SELECT password_hash FROM app.users WHERE id = $1",
+            [googleSignIn.user.id],
+          )
+        ).rows,
+      ).toEqual([{ password_hash: null }]);
+      expect(
+        await resolveGoogleUser(
+          { ...profile, name: "Changed Name", email: "new@example.invalid" },
+          profile.sub,
+        ),
+      ).toEqual(googleSignIn);
+      expect(
+        await resolveGoogleUser(
+          {
+            ...profile,
+            sub: "password-conflict",
+            email: " NEW@EXAMPLE.INVALID ",
+          },
+          "password-conflict",
+        ),
+      ).toEqual({ error: "GoogleAccountConflict" });
+      expect(
+        await resolveGoogleUser(
+          { ...profile, sub: "google-conflict" },
+          "google-conflict",
+        ),
+      ).toEqual({ error: "GoogleAccountConflict" });
+      expect(
+        (
+          await pool.query(
+            "SELECT user_id FROM app.accounts WHERE provider_account_id = ANY($1)",
+            [["password-conflict", "google-conflict"]],
+          )
+        ).rows,
+      ).toEqual([]);
+      for (const differentEmails of [false, true]) {
+        const sub = `concurrent-google-${differentEmails}`;
+        const firstEmail = `first-${differentEmails}@example.invalid`;
+        const secondEmail = differentEmails
+          ? "second@example.invalid"
+          : firstEmail;
+        const results = await Promise.all([
+          resolveGoogleUser({ ...profile, sub, email: firstEmail }, sub),
+          resolveGoogleUser({ ...profile, sub, email: secondEmail }, sub),
+        ]);
+        expect(results[0]).toHaveProperty("user");
+        expect(results[1]).toEqual(results[0]);
+        expect(
+          (
+            await pool.query("SELECT id FROM app.users WHERE email = ANY($1)", [
+              [firstEmail, secondEmail],
+            ])
+          ).rows,
+        ).toHaveLength(1);
+        expect(
+          (
+            await pool.query(
+              "SELECT user_id FROM app.accounts WHERE provider_account_id = $1",
+              [sub],
+            )
+          ).rows,
+        ).toHaveLength(1);
+      }
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      await schemaClient.query(
+        "REVOKE INSERT (user_id, provider, provider_account_id) ON app.accounts FROM next_auth_runtime",
+      );
+      try {
+        await expect(
+          resolveGoogleUser(
+            {
+              ...profile,
+              sub: "failed-association",
+              email: "rollback@example.invalid",
+            },
+            "failed-association",
+          ),
+        ).rejects.toThrow("Google sign-in persistence failed");
+        expect(
+          (
+            await pool.query("SELECT id FROM app.users WHERE email = $1", [
+              "rollback@example.invalid",
+            ])
+          ).rows,
+        ).toEqual([]);
+        expect(log).toHaveBeenCalledWith("Google sign-in persistence failed");
+      } finally {
+        await schemaClient.query(
+          "GRANT INSERT (user_id, provider, provider_account_id) ON app.accounts TO next_auth_runtime",
+        );
+        log.mockRestore();
+      }
       await expect(
         pool.query("UPDATE app.users SET name = $1", ["Forbidden"]),
       ).rejects.toMatchObject({ code: "42501" });
